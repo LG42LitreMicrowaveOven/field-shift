@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Shift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="nav" id="nav">
+  <a href="#/farm" class="navlink" data-route="farm">My Farm</a>
+  <a href="#/home" class="brand">Field Shift</a>
+  <div class="menu">
+    <button class="navlink" id="rotBtn" aria-haspopup="true">Rotation Strategy ▾</button>
+    <div class="dropdown" id="rotMenu">
+      <a href="#/generate">Generate Rotation Strategy</a>
+      <a href="#/analyze">Analyze Rotation Strategy</a>
+    </div>
+    <a href="#/crops" class="navlink" data-route="crops">Crop Database</a>
+    <a href="#/options" class="navlink" data-route="options">Options</a>
+  </div>
+</header>
+<main id="app" tabindex="-1"></main>
+<footer class="foot">Field Shift prototype · All values are demonstration data, not agricultural advice.</footer>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
