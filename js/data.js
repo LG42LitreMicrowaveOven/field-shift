@@ -1,4 +1,4 @@
-/* Mock data for Field Shift. Every get*() function returns a Promise so it can later be swapped for
+/* Mock data for HarvestV. Every get*() function returns a Promise so it can later be swapped for
    fetch("/api/...") with no change in app.js. All values are DEMONSTRATION data. */
 const cropData = [
  {id:'rice',name:'Rice',emoji:'🌾',season:'Summer',duration:'110–140 days',temp:'25–35°C',moisture:'High',soil:'Clay loam, holds water',nitrogen:'High',fertilizer:'Split nitrogen applications; avoid over-application near flowering.',water:3,waterLabel:'High',pests:'Stem borer, blast, brown planthopper',drought:'Low',legume:false,before:['Mung Bean','Wheat','Mustard','Lentil'],after:['Mung Bean','Wheat','Mustard','Lentil','Potato'],desc:"Bangladesh's staple cereal, grown in flooded or well-watered fields."},

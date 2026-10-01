@@ -1,4 +1,4 @@
-/* Field Shift frontend prototype: hash-routed single page app, plain JS. */
+/* HarvestV frontend prototype: hash-routed single page app, plain JS. */
 const app = document.getElementById('app');
 const state = { profile: null, results: [], report: null, env: null };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -95,7 +95,7 @@ function runProcessing(title, steps, done) {
 const views = {
   home() {
     app.className = 'wide fade';
-    app.innerHTML = `<section class="hero"><h1>Field <span>Shift</span></h1>
+    app.innerHTML = `<section class="hero"><h1>Harvest<span>V</span></h1>
       <p>Understand your field. Explore your options. Prepare for what's next.</p>
       <div class="bigcards"><a class="bigcard accent" href="#/crops"><div class="ic">🌾</div><h3>Crop Database</h3><small>Browse crops grown near you</small></a>
       <button class="bigcard" id="rotCard"><div class="ic">🔄</div><h3>Rotation Strategy</h3><small>Generate or analyze a rotation</small></button></div>
@@ -199,7 +199,7 @@ const views = {
       <h2>8. Research / Evidence</h2><div class="demo"><b>Demo data: backend research database not connected.</b><ul>${demoReferences.map(x => `<li>${x}</li>`).join('')}</ul></div>
       <h2>9. What-if / Future Conditions</h2><div class="card"><table><tr><th>Scenario</th><th>Risk level</th><th>Note</th></tr>${sc}</table></div></div>`;
     document.getElementById('dl').onclick = () => {
-      const html = `<!DOCTYPE html><meta charset="utf-8"><title>Field Shift Report</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:30px auto;color:#1c2a12}.card,.stat{border:1px solid #ccd;padding:12px;margin:8px 0;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}.bar,details,.back{display:none}</style>${document.getElementById('reportBody').innerHTML}<p><i>Field Shift prototype. Demonstration data only.</i></p>`;
+      const html = `<!DOCTYPE html><meta charset="utf-8"><title>HarvestV Report</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:30px auto;color:#1c2a12}.card,.stat{border:1px solid #ccd;padding:12px;margin:8px 0;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}.bar,details,.back{display:none}</style>${document.getElementById('reportBody').innerHTML}<p><i>HarvestV prototype. Demonstration data only.</i></p>`;
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([html], { type: 'text/html' })), download: 'field-shift-report.html' }); a.click();
     };
   },
@@ -226,7 +226,7 @@ const views = {
     document.getElementById('vr').onclick = () => location.hash = '#/report';
   },
   options() {
-    app.innerHTML = `<h1 class="title">Options</h1><p class="sub">Settings for your Field Shift experience.</p>
+    app.innerHTML = `<h1 class="title">Options</h1><p class="sub">Settings for your HarvestV experience.</p>
       <div class="card"><label for="lang">Language</label><select id="lang"><option>English</option><option>বাংলা (coming soon)</option></select><small>Language switching is a placeholder for a future version.</small></div>
       <div class="grid" style="margin-top:14px">${['Notifications', 'Units', 'Data preferences'].map(x => `<div class="card off"><h3>${x}</h3><small>Coming soon</small></div>`).join('')}</div>`;
   }
