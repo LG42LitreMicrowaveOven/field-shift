@@ -1,6 +1,6 @@
 /* HarvestV frontend prototype: hash-routed single page app, plain JS. */
 const app = document.getElementById('app');
-const state = { profile: null, results: [], report: null, env: null };
+const state = { profile: null, results: [], report: null, coords: null, env: { data: null, fetchedAt: null, key: null } };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const findCrop = n => cropData.find(c => c.name === n);
 const tone = (label, goodHigh = true) => {
@@ -62,10 +62,19 @@ async function generateRotationStrategies(profile) {
 async function analyzeRotation(seq, profile) { return evaluateRotation(seq, profile); } // API: POST /api/rotations/analyze
 
 /* ---------- Shared UI pieces ---------- */
+/* `e` comes from toEnvironmentView() in data.js; null means the data is unavailable. */
 function displayEnvironmentalConditions(e) {
-  const s = (i, k, v, pct) => `<div class="card stat env"><div class="i">${i}</div><div class="k">${k}</div><div class="v">${v}</div>${pct ? `<div class="bar sky"><i style="width:${pct}%"></i></div>` : ''}</div>`;
-  return `<div class="grid">${s('🌧', 'Recent rainfall', e.rainfall + ' mm', Math.min(100, e.rainfall * 1.5))}${s('☀', 'Sunlight', e.sunlight + ' hrs/day', e.sunlight / 12 * 100)}${s('💧', 'Soil moisture', e.soilMoisture, e.soilMoisturePct)}${s('🌡', 'Temperature', e.temperature + '°C', e.temperature / 45 * 100)}${s('🌱', 'Vegetation condition', e.vegetation, e.vegetationPct)}</div>
-  <details><summary>Details</summary><p>Moisture index 0.37, vegetation index 0.62, 30-day rainfall total. Shown in plain words above. Demo values; a future version would draw on NASA Earth-observation and weather data.</p></details>`;
+  if (!e) return `<div class="card sky">Environmental data is currently unavailable.</div>`;
+  const has = v => v !== null && v !== undefined, na = 'Not available yet';
+  const s = (i, k, v, pct) => `<div class="card stat env"><div class="i">${i}</div><div class="k">${k}</div><div class="v"${v === na ? ' style="font-size:1rem"' : ''}>${v}</div>${pct != null ? `<div class="bar sky"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>` : ''}</div>`;
+  const solarMax = /kWh/i.test(e.solarUnits) ? 8 : 30;
+  return `<div class="grid">
+    ${s('🌡', 'Temperature (daily average)', e.temperature + '°C', e.temperature / 45 * 100)}
+    ${s('🌧', `Rainfall (last ${e.rainfallDays} days)`, e.rainfall + ' mm', e.rainfall * 1.5)}
+    ${s('☀', 'Solar radiation', `${e.solar} ${esc(e.solarUnits)}`, e.solar / solarMax * 100)}
+    ${s('💧', 'Soil moisture', has(e.soilMoisture) ? e.soilMoisture : na)}
+    ${s('🌱', 'Vegetation condition', has(e.ndvi) ? e.ndvi : na)}</div>
+  <details><summary>Details</summary><p>Source: ${esc(e.source)}. Latest available daily data: ${esc(e.dataDate)} (NASA POWER daily data arrives with a short delay, so this is recent rather than live). Temperature is the average air temperature at 2 m. Rainfall is corrected precipitation summed over the days shown. Solar radiation is the sunlight reaching the ground on a typical sky. Soil moisture (NASA SMAP) and vegetation condition (NASA MODIS) will be added later.</p></details>`;
 }
 const fieldSel = (id, label, opts, val) => `<div><label for="${id}">${label}</label><select id="${id}" name="${id}">${opts.map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
 function farmFormFields(f) {
@@ -91,6 +100,65 @@ function runProcessing(title, steps, done) {
   setTimeout(done, 250 + lis.length * 300 + 200);
 }
 
+/* ---------- Environmental data loading (Stage 1) ---------- */
+let envRequestId = 0; // lets us ignore stale responses if the location changes mid-request
+const envKey = c => c.latitude.toFixed(2) + ',' + c.longitude.toFixed(2);
+/* Coordinates priority: browser GPS this session > saved farm coordinates > demo city coordinates. */
+function resolveCoords(farm) {
+  if (state.coords) return state.coords;
+  if (farm.latitude != null && farm.longitude != null) return { latitude: farm.latitude, longitude: farm.longitude };
+  const c = locations[(farm.location || '').replace('Near ', '').split(',')[0]];
+  return c ? { latitude: c[0], longitude: c[1] } : null;
+}
+/* Uses GPS silently only if the user already granted permission (no surprise prompt). */
+async function tryBrowserLocation() {
+  if (!navigator.geolocation || !navigator.permissions) return null;
+  try { if ((await navigator.permissions.query({ name: 'geolocation' })).state !== 'granted') return null; } catch (e) { return null; }
+  return new Promise(res => navigator.geolocation.getCurrentPosition(
+    pos => res({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }), () => res(null), { timeout: 8000 }));
+}
+function renderEnvBox({ loading = false, error = null, onRetry = null } = {}) {
+  const box = document.getElementById('envBox'); if (!box) return; // user already navigated away
+  const { data, fetchedAt } = state.env;
+  let html = loading ? '<div class="note">Fetching the latest NASA environmental data…</div>' : '';
+  if (error) html += `<div class="note">${esc(error)}${data ? ' Showing the last data we received.' : ''}</div>`;
+  html += displayEnvironmentalConditions(data);
+  if (data) {
+    const t = fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    html += `<p class="sub" style="margin:12px 0 0">Last updated: ${t} · ${data.isMock ? 'Demo data, not from NASA' : 'NASA POWER daily data through ' + esc(data.dataDate)}</p>`;
+  }
+  if (onRetry) html += '<p><button class="btn ghost" id="retryEnv">Try again</button></p>';
+  box.innerHTML = html;
+  if (onRetry) document.getElementById('retryEnv').onclick = onRetry;
+}
+/* Called once per visit to My Farm (and when the location changes), never on a timer. */
+async function loadEnvironment(farm) {
+  const coords = resolveCoords(farm), id = ++envRequestId;
+  if (!coords) return renderEnvBox({ error: 'Choose a location to see environmental data.' });
+  const key = envKey(coords);
+  if (state.env.key !== key) state.env = { data: null, fetchedAt: null, key }; // never show another place's data
+  renderEnvBox({ loading: true });
+  try {
+    const data = toEnvironmentView(await getEnvironmentalData(coords.latitude, coords.longitude));
+    if (id !== envRequestId) return;
+    state.env = { data, fetchedAt: new Date(), key };
+    renderEnvBox();
+  } catch (err) {
+    console.warn('Environmental data request failed:', err);
+    if (id === envRequestId) renderEnvBox({ error: 'Environmental data is currently unavailable.', onRetry: () => loadEnvironment(farm) });
+  }
+}
+/* For the report page: reuse what My Farm already loaded; fetch once only if nothing is cached. */
+async function ensureEnvironment() {
+  if (state.env.data) return state.env.data;
+  try {
+    const c = resolveCoords(await getFarmData()); if (!c) return null;
+    const data = toEnvironmentView(await getEnvironmentalData(c.latitude, c.longitude));
+    state.env = { data, fetchedAt: new Date(), key: envKey(c) };
+    return data;
+  } catch (err) { console.warn('Environmental data request failed:', err); return null; }
+}
+
 /* ---------- Views ---------- */
 const views = {
   home() {
@@ -103,19 +171,27 @@ const views = {
     document.getElementById('rotCard').onclick = () => document.getElementById('rotMenu').classList.toggle('open');
   },
   async farm() {
-    const [f, env] = await Promise.all([getFarmData(), getEnvironmentalData()]);
+    const f = await getFarmData();
     app.innerHTML = `<h1 class="title">My Farm</h1><p class="sub">Your field at a glance.</p>
       <div class="card sky row space"><div><h3>📍 Location</h3><div id="locText" style="font-size:1.3rem;font-weight:600">${esc(f.location)}</div><small id="coords"></small></div>
       <div class="row"><button class="btn" id="geo">Use my location</button><button class="btn ghost" id="chg">Change location</button></div></div>
       <div id="manual" style="display:none;margin-top:12px" class="card"><label for="manLoc">Select your location</label><select id="manLoc">${Object.keys(locations).map(l => `<option>${l}, Bangladesh</option>`).join('')}</select><p><button class="btn" id="manSave">Save location</button></p></div>
-      <h2>Current Conditions</h2><span class="note">Demo data: standing in for NASA Earth-observation and weather information.</span>${displayEnvironmentalConditions(env)}
+      <h2>Current Conditions</h2><div id="envBox"></div>
       <h2>Farm Profile</h2><div id="profile"></div>`;
+    const manual = document.getElementById('manual'), coordsEl = document.getElementById('coords');
     const renderProfile = f => {
       const it = (k, v) => `<div class="card stat"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
       document.getElementById('profile').innerHTML = `<div class="grid">${it('Field size', f.size + ' hectare')}${it('Current crop', f.crop)}${it('Previous crop', f.previous)}${it('Irrigation', f.irrigation)}${it('Main priority', f.priority)}${it('Soil', f.soil)}</div><p><button class="btn yellow" id="edit">Edit Farm Information</button></p>`;
       document.getElementById('edit').onclick = () => editFarm(f);
     };
-    const setLoc = async (label, coords) => { f.location = label; await saveFarmData(f); document.getElementById('locText').textContent = label; document.getElementById('coords').textContent = coords || ''; document.getElementById('manual').style.display = 'none'; };
+    /* Saves the new location and fetches environmental data for it (one request per change). */
+    const setLoc = async (label, text, coords) => {
+      f.location = label;
+      if (coords) { f.latitude = coords.latitude; f.longitude = coords.longitude; state.coords = coords; }
+      await saveFarmData(f);
+      document.getElementById('locText').textContent = label; coordsEl.textContent = text || ''; manual.style.display = 'none';
+      loadEnvironment(f);
+    };
     function editFarm(f) {
       document.getElementById('profile').innerHTML = `<form class="card" id="ef"><div class="form">
         <div><label>Field size (ha)</label><input type="number" name="size" step="0.1" value="${f.size}"></div>
@@ -127,16 +203,22 @@ const views = {
       document.getElementById('ef').onsubmit = async e => { e.preventDefault(); Object.assign(f, Object.fromEntries(new FormData(e.target))); await saveFarmData(f); renderProfile(f); };
     }
     renderProfile(f);
-    document.getElementById('chg').onclick = () => document.getElementById('manual').style.display = 'block';
-    document.getElementById('manSave').onclick = () => setLoc(document.getElementById('manLoc').value);
-    document.getElementById('geo').onclick = () => {
-      if (!navigator.geolocation) return document.getElementById('manual').style.display = 'block';
-      navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude: la, longitude: lo } = pos.coords; // Mock reverse geocoding: nearest demo city
-        const near = Object.entries(locations).sort((a, b) => Math.hypot(a[1][0] - la, a[1][1] - lo) - Math.hypot(b[1][0] - la, b[1][1] - lo))[0][0];
-        setLoc(`Near ${near}, Bangladesh`, `Lat ${la.toFixed(3)}, Lon ${lo.toFixed(3)}`);
-      }, () => document.getElementById('manual').style.display = 'block');
+    document.getElementById('chg').onclick = () => manual.style.display = 'block';
+    document.getElementById('manSave').onclick = () => {
+      const label = document.getElementById('manLoc').value, c = locations[label.split(',')[0]];
+      setLoc(label, '', { latitude: c[0], longitude: c[1] });
     };
+    document.getElementById('geo').onclick = () => {
+      if (!navigator.geolocation) { coordsEl.textContent = 'This browser does not support location. Please choose a location.'; manual.style.display = 'block'; return; }
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude: la, longitude: lo } = pos.coords; // Mock reverse geocoding: nearest demo city (label only)
+        const near = Object.entries(locations).sort((a, b) => Math.hypot(a[1][0] - la, a[1][1] - lo) - Math.hypot(b[1][0] - la, b[1][1] - lo))[0][0];
+        setLoc(`Near ${near}, Bangladesh`, `Lat ${la.toFixed(3)}, Lon ${lo.toFixed(3)}`, { latitude: la, longitude: lo });
+      }, () => { coordsEl.textContent = 'Location permission was not granted. Please choose a location.'; manual.style.display = 'block'; }, { timeout: 10000 });
+    };
+    // One environmental request per visit: use GPS if already permitted, otherwise the saved/chosen location.
+    if (!state.coords) { const c = await tryBrowserLocation(); if (c) state.coords = c; }
+    loadEnvironment(f);
   },
   async crops() {
     const data = await getCropData();
@@ -181,7 +263,7 @@ const views = {
   },
   async report() {
     if (!state.report) return location.hash = '#/home';
-    const { result: r, profile: p } = state.report, env = await getEnvironmentalData();
+    const { result: r, profile: p } = state.report, env = await ensureEnvironment();
     const pri = (p.priorities || []).join(', ') || 'None selected';
     const crops = r.seq.filter((c, i) => r.seq.indexOf(c) === i).map(findCrop);
     const sc = whatIfScenarios.map(s => { const pts = r.risk_pts + s.water * (r.water === 'Low–Moderate' ? .4 : 1);
@@ -195,7 +277,7 @@ const views = {
       <h2>4. Rotation Reasoning</h2><div class="card"><ul class="ok">${r.reasons.map(x => `<li>${x}</li>`).join('')}</ul></div>
       <h2>5. Benefits</h2><div class="card"><ul class="ok">${r.strengths.map(x => `<li>${x}</li>`).join('')}</ul></div>
       <h2>6. Risks and Limitations</h2><div class="card"><ul class="warn">${r.risks.map(x => `<li>${x}</li>`).join('')}<li>Mock scoring only; not validated against field trials</li></ul></div>
-      <h2>7. Environmental Considerations</h2><div class="card sky"><p>Rainfall, temperature and soil moisture shape planting windows and irrigation needs. Recent rainfall of ${env.rainfall} mm and ${env.soilMoisture.toLowerCase()} soil moisture suggest watching water supply in later stages.</p></div>
+      <h2>7. Environmental Considerations</h2><div class="card sky"><p>Rainfall, temperature and soil moisture shape planting windows and irrigation needs. ${env ? `Recent NASA environmental data shows ${env.rainfall} mm of rain over ${env.rainfallDays} days and a daily average of ${env.temperature}°C, which is worth keeping in mind for water planning.` : 'Environmental data was not available when this report was prepared.'}</p></div>
       <h2>8. Research / Evidence</h2><div class="demo"><b>Demo data: backend research database not connected.</b><ul>${demoReferences.map(x => `<li>${x}</li>`).join('')}</ul></div>
       <h2>9. What-if / Future Conditions</h2><div class="card"><table><tr><th>Scenario</th><th>Risk level</th><th>Note</th></tr>${sc}</table></div></div>`;
     document.getElementById('dl').onclick = () => {

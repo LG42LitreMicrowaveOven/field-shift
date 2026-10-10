@@ -14,7 +14,9 @@ const cropData = [
 ];
 const locations = {Rangpur:[25.75,89.25],Rajshahi:[24.37,88.6],Mymensingh:[24.75,90.4],Dhaka:[23.81,90.41],Khulna:[22.82,89.55]};
 const defaultFarm = {location:'Rangpur, Bangladesh',size:'1.0',crop:'Rice',previous:'Rice',irrigation:'Limited',priority:'Water efficiency',soil:'Clay loam'};
-const environmentalData = {rainfall:42,sunlight:6.8,soilMoisture:'Moderate',soilMoisturePct:55,temperature:29,vegetation:'Healthy',vegetationPct:78};
+/* DEV ONLY: demo environmental data in the same shape as the API response. Used only when
+   HARVESTV_CONFIG.useMockEnvironment is true and always labelled as demo data, never as NASA. */
+const mockEnvironmentalApiResponse = {location:{latitude:25.75,longitude:89.25},weather:{temperature:29,rainfall:42,rainfall_days:7,solar_radiation:18.2,solar_radiation_units:'MJ/m²/day',data_date:'demo'},soil:{moisture:null},vegetation:{ndvi:null},sources:{weather:'Demo data (not NASA)',soil:null,vegetation:null}};
 /* Candidate sequences the mock "engine" scores. A real backend would produce these. */
 const rotationTemplates = [['Rice','Mung Bean','Rice'],['Rice','Wheat','Rice'],['Rice','Mustard','Rice'],['Rice','Lentil','Jute'],['Maize','Mung Bean','Wheat'],['Potato','Rice','Mustard']];
 const whatIfScenarios = [{name:'Normal rainfall',water:0,note:'Baseline conditions.'},{name:'Lower rainfall',water:1,note:'Water-hungry crops face more stress.'},{name:'Higher temperature',water:0.5,note:'Heat can shorten planting windows for cool-season crops.'},{name:'Limited irrigation',water:1,note:'Needs reliable irrigation for later stages.'}];
@@ -24,5 +26,33 @@ const delay=(v,ms=120)=>new Promise(r=>setTimeout(()=>r(v),ms));
 const getCropData=()=>delay(cropData);
 const getFarmData=()=>delay(JSON.parse(localStorage.getItem('fsFarm')||'null')||defaultFarm);
 const saveFarmData=f=>{localStorage.setItem('fsFarm',JSON.stringify(f));return delay(f,0)};
-const getEnvironmentalData=()=>delay(environmentalData);
+/* Stage 1: real environmental data from our FastAPI backend (which calls NASA POWER).
+   Throws an Error with a short message on any failure; callers show a friendly message. */
+async function getEnvironmentalData(latitude, longitude) {
+  if (HARVESTV_CONFIG.useMockEnvironment) return delay(mockEnvironmentalApiResponse);
+  const url = `${HARVESTV_CONFIG.apiBaseUrl}/api/environment?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000); // NASA can be slow
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).detail; } catch (e) { /* non-JSON error body */ }
+      throw new Error(`Backend returned ${res.status}${detail ? ': ' + (typeof detail === 'string' ? detail : 'invalid request') : ''}`);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('The environmental data request timed out.');
+    throw err;
+  } finally { clearTimeout(timer); }
+}
+/* Turns the API response into the small object the UI uses. Throws if the response is malformed. */
+function toEnvironmentView(api) {
+  const w = api && api.weather;
+  if (!w || typeof w.temperature !== 'number') throw new Error('Unexpected environmental data format.');
+  return { temperature: w.temperature, rainfall: w.rainfall, rainfallDays: w.rainfall_days, solar: w.solar_radiation,
+    solarUnits: w.solar_radiation_units || '', dataDate: w.data_date, source: (api.sources && api.sources.weather) || 'NASA POWER',
+    isMock: !!(api.sources && /demo/i.test(api.sources.weather || '')),
+    soilMoisture: api.soil ? api.soil.moisture : null, ndvi: api.vegetation ? api.vegetation.ndvi : null };
+}
 const getRotationCandidates=()=>delay(rotationTemplates);
