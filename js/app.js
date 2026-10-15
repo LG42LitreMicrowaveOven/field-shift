@@ -159,6 +159,19 @@ async function ensureEnvironment() {
   } catch (err) { console.warn('Environmental data request failed:', err); return null; }
 }
 
+/* Rotation pages and farm forms read the crop catalog synchronously, so make sure it is loaded first. */
+async function ensureCropCatalog() {
+  const stamp = location.hash;
+  try { await getCropData(); return location.hash === stamp; }
+  catch (err) {
+    console.warn('Crop catalog request failed:', err);
+    if (location.hash !== stamp) return false;
+    app.innerHTML = `<h1 class="title">Crop information is currently unavailable</h1><p class="sub">We couldn't load the crop database. Please try again in a moment.</p><p><button class="btn" id="retryCrops">Try again</button></p>`;
+    document.getElementById('retryCrops').onclick = route;
+    return false;
+  }
+}
+
 /* ---------- Views ---------- */
 const views = {
   home() {
@@ -182,7 +195,10 @@ const views = {
     const renderProfile = f => {
       const it = (k, v) => `<div class="card stat"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
       document.getElementById('profile').innerHTML = `<div class="grid">${it('Field size', f.size + ' hectare')}${it('Current crop', f.crop)}${it('Previous crop', f.previous)}${it('Irrigation', f.irrigation)}${it('Main priority', f.priority)}${it('Soil', f.soil)}</div><p><button class="btn yellow" id="edit">Edit Farm Information</button></p>`;
-      document.getElementById('edit').onclick = () => editFarm(f);
+      document.getElementById('edit').onclick = async () => {
+        try { await getCropData(); editFarm(f); }
+        catch (err) { document.getElementById('edit').insertAdjacentHTML('afterend', ' <span class="note">Crop list is currently unavailable.</span>'); }
+      };
     };
     /* Saves the new location and fetches environmental data for it (one request per change). */
     const setLoc = async (label, text, coords) => {
@@ -221,17 +237,42 @@ const views = {
     loadEnvironment(f);
   },
   async crops() {
-    const data = await getCropData();
-    app.innerHTML = `<h1 class="title">Crop Database</h1><p class="sub">Crops commonly grown in your area.</p><input type="search" id="q" placeholder="Search crops..." aria-label="Search crops" style="margin-bottom:16px"><div class="list" id="cl"></div>`;
+    const stamp = location.hash;
+    app.innerHTML = `<h1 class="title">Crop Database</h1><p class="sub">Crops commonly grown in your area.</p><input type="search" id="q" placeholder="Search crops..." aria-label="Search crops" style="margin-bottom:16px" disabled><div class="list" id="cl"><p style="padding:20px">Loading crops…</p></div>`;
+    const search = document.getElementById('q'), list = document.getElementById('cl');
+    let data;
+    try { data = await getCropData(); }
+    catch (err) {
+      console.warn('Crop list request failed:', err);
+      if (location.hash !== stamp) return;
+      list.innerHTML = `<div style="padding:20px"><p>The crop database is currently unavailable.</p><button class="btn" id="retryCrops">Try again</button></div>`;
+      document.getElementById('retryCrops').onclick = () => views.crops();
+      return;
+    }
+    if (location.hash !== stamp) return; // user already navigated elsewhere
+    search.disabled = false;
     const draw = q => { const r = data.filter(c => (c.name + c.season).toLowerCase().includes(q.toLowerCase()));
-      document.getElementById('cl').innerHTML = r.map(c => `<button class="item" data-id="${c.id}"><span class="n">${c.emoji}&nbsp; ${c.name}</span><span class="tag ${c.season}">${c.season}</span></button>`).join('') || '<p style="padding:20px">No crops match your search.</p>'; };
-    draw(''); document.getElementById('q').oninput = e => draw(e.target.value);
-    document.getElementById('cl').onclick = e => { const b = e.target.closest('.item'); if (b) location.hash = '#/crop/' + b.dataset.id; };
+      list.innerHTML = r.map(c => `<button class="item" data-id="${c.id}"><span class="n">${c.emoji}&nbsp; ${c.name}</span><span class="tag ${c.season}">${c.season}</span></button>`).join('') || '<p style="padding:20px">No crops match your search.</p>'; };
+    draw(''); search.oninput = e => draw(e.target.value);
+    list.onclick = e => { const b = e.target.closest('.item'); if (b) location.hash = '#/crop/' + b.dataset.id; };
   },
   async crop(id) {
-    const c = (await getCropData()).find(x => x.id === id); if (!c) return location.hash = '#/crops';
+    const stamp = location.hash, back = `<button class="back" onclick="location.hash='#/crops'">← Crop Database</button>`;
+    app.innerHTML = `${back}<p class="sub" style="margin-top:20px">Loading crop details…</p>`;
+    let c;
+    try { c = await getCropById(id); } // GET /api/crops/{id}
+    catch (err) {
+      console.warn('Crop detail request failed:', err);
+      if (location.hash !== stamp) return;
+      app.innerHTML = err.status === 404
+        ? `${back}<h1 class="title" style="margin-top:14px">Crop not found</h1><p class="sub">We couldn't find that crop. The link may be wrong or the crop may have been removed.</p>`
+        : `${back}<h1 class="title" style="margin-top:14px">Crop details are currently unavailable</h1><p class="sub">Please try again in a moment.</p><p><button class="btn" id="retryCrop">Try again</button></p>`;
+      const retry = document.getElementById('retryCrop'); if (retry) retry.onclick = () => views.crop(id);
+      return;
+    }
+    if (location.hash !== stamp) return;
     const it = (k, v) => `<div class="card stat"><div class="k">${k}</div><div class="v" style="font-size:1.1rem">${esc(v)}</div></div>`;
-    app.innerHTML = `<button class="back" onclick="location.hash='#/crops'">← Crop Database</button>
+    app.innerHTML = `${back}
       <div class="crophead"><div class="cropimg">${c.emoji}</div><div><h1 class="title" style="color:#fff">${c.name}</h1><p style="margin:0;color:var(--lav)">${c.desc}</p></div></div>
       <div class="grid">${it('Preferred season', c.season)}${it('Growing duration', c.duration)}${it('Temperature', c.temp)}${it('Soil moisture', c.moisture)}${it('Water requirement', c.waterLabel)}${it('Nitrogen requirement', c.nitrogen)}${it('Drought tolerance', c.drought)}${it('Soil requirements', c.soil)}</div>
       <h2>Fertilizer and pests</h2><div class="grid">${it('Fertilizer considerations', c.fertilizer)}${it('Pest and disease considerations', c.pests)}</div>
@@ -239,7 +280,8 @@ const views = {
       <p><b>Common preceding crops:</b> ${c.before.join(', ')}<br><b>Compatible following crops:</b> ${c.after.join(', ')}</p>
       <details><summary>Why?</summary><p>Mock demonstration content, not scientifically validated.</p></details></div>`;
   },
-  generate() {
+  async generate() {
+    if (!(await ensureCropCatalog())) return;
     getFarmData().then(f => {
       app.innerHTML = `<h1 class="title">Generate Rotation Strategy</h1><p class="sub">Tell us about your farm and what matters most to you.</p>
         <form id="gf" class="card">${farmFormFields(f)}<h2>Preferred crops</h2><div class="chips">${['Rice', 'Mung Bean', 'Wheat', 'Maize', 'Lentil', 'Mustard'].map(c => `<label class="chip"><input type="checkbox" name="crops" value="${c}"><span>${c}</span></label>`).join('')}</div>
@@ -285,7 +327,8 @@ const views = {
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([html], { type: 'text/html' })), download: 'field-shift-report.html' }); a.click();
     };
   },
-  analyze() {
+  async analyze() {
+    if (!(await ensureCropCatalog())) return;
     getFarmData().then(f => {
       app.innerHTML = `<h1 class="title">Analyze My Rotation</h1><p class="sub">Enter the rotation you are considering.</p>
         <form id="af" class="card"><div class="form">${[['Crop 1', 'Rice'], ['Crop 2', 'Mung Bean'], ['Crop 3', 'Rice']].map(([l, v], i) => `<div><label for="c${i}">${l}</label><select id="c${i}" name="seq">${cropOptions(v)}</select></div>`).join('')}</div>

@@ -1,17 +1,8 @@
 /* Mock data for HarvestV. Every get*() function returns a Promise so it can later be swapped for
    fetch("/api/...") with no change in app.js. All values are DEMONSTRATION data. */
-const cropData = [
- {id:'rice',name:'Rice',emoji:'🌾',season:'Summer',duration:'110–140 days',temp:'25–35°C',moisture:'High',soil:'Clay loam, holds water',nitrogen:'High',fertilizer:'Split nitrogen applications; avoid over-application near flowering.',water:3,waterLabel:'High',pests:'Stem borer, blast, brown planthopper',drought:'Low',legume:false,before:['Mung Bean','Wheat','Mustard','Lentil'],after:['Mung Bean','Wheat','Mustard','Lentil','Potato'],desc:"Bangladesh's staple cereal, grown in flooded or well-watered fields."},
- {id:'mung',name:'Mung Bean',emoji:'🫛',season:'Summer',duration:'60–75 days',temp:'25–35°C',moisture:'Moderate',soil:'Loam or sandy loam, well drained',nitrogen:'Low (fixes its own)',fertilizer:'Light phosphorus; little nitrogen needed.',water:1.5,waterLabel:'Moderate–Low',pests:'Yellow mosaic virus, pod borer',drought:'Moderate',legume:true,before:['Rice','Wheat','Jute'],after:['Rice','Wheat','Mustard'],desc:'A short-duration pulse that fits between main crops and adds nitrogen to the soil.'},
- {id:'wheat',name:'Wheat',emoji:'🌿',season:'Winter',duration:'105–120 days',temp:'15–25°C',moisture:'Moderate',soil:'Well-drained loam',nitrogen:'Moderate–High',fertilizer:'Nitrogen split between sowing and tillering.',water:2,waterLabel:'Moderate',pests:'Leaf rust, wheat blast, aphids',drought:'Moderate',legume:false,before:['Rice','Mung Bean','Jute'],after:['Rice','Mung Bean','Maize'],desc:'A cool-season cereal sown after the monsoon rice harvest.'},
- {id:'maize',name:'Maize',emoji:'🌽',season:'Winter',duration:'130–150 days',temp:'20–30°C',moisture:'Moderate',soil:'Fertile, well-drained loam',nitrogen:'High',fertilizer:'High demand; plan split nitrogen.',water:2.5,waterLabel:'Moderate–High',pests:'Fall armyworm, stalk rot',drought:'Low–Moderate',legume:false,before:['Mung Bean','Lentil','Rice'],after:['Mung Bean','Lentil','Wheat'],desc:'A high-yield cereal used for food and feed.'},
- {id:'lentil',name:'Lentil',emoji:'🫘',season:'Winter',duration:'100–115 days',temp:'15–25°C',moisture:'Low–Moderate',soil:'Loam, well drained',nitrogen:'Low (fixes its own)',fertilizer:'Minimal; small phosphorus dose.',water:1,waterLabel:'Low',pests:'Rust, stemphylium blight',drought:'High',legume:true,before:['Rice','Jute','Maize'],after:['Rice','Maize','Jute'],desc:'A drought-tolerant winter pulse.'},
- {id:'mustard',name:'Mustard',emoji:'🌼',season:'Winter',duration:'80–100 days',temp:'15–25°C',moisture:'Low–Moderate',soil:'Loam to clay loam',nitrogen:'Moderate',fertilizer:'Sulphur and boron often considered.',water:1.2,waterLabel:'Low–Moderate',pests:'Aphids, alternaria blight',drought:'Moderate–High',legume:false,before:['Rice','Mung Bean','Jute'],after:['Rice','Mung Bean','Jute'],desc:'A short winter oilseed that fits tight rotations.'},
- {id:'potato',name:'Potato',emoji:'🥔',season:'Winter',duration:'85–100 days',temp:'15–22°C',moisture:'Moderate',soil:'Loose, well-drained sandy loam',nitrogen:'High',fertilizer:'High nitrogen and potassium demand.',water:2.2,waterLabel:'Moderate',pests:'Late blight, tuber moth',drought:'Low',legume:false,before:['Rice','Jute','Mung Bean'],after:['Rice','Mustard','Mung Bean'],desc:'A cash crop grown in the cool dry months.'},
- {id:'jute',name:'Jute',emoji:'🌱',season:'Summer',duration:'110–130 days',temp:'24–37°C',moisture:'High',soil:'Alluvial loam',nitrogen:'Moderate',fertilizer:'Moderate nitrogen; organic matter helps.',water:2.5,waterLabel:'Moderate–High',pests:'Stem weevil, root rot',drought:'Low',legume:false,before:['Wheat','Mustard','Lentil','Potato'],after:['Wheat','Mustard','Lentil'],desc:'A fibre crop suited to warm, humid conditions.'},
- {id:'tomato',name:'Tomato',emoji:'🍅',season:'Winter',duration:'100–130 days',temp:'18–28°C',moisture:'Moderate',soil:'Fertile, well-drained loam',nitrogen:'Moderate–High',fertilizer:'Balanced feed; calcium considered.',water:2.2,waterLabel:'Moderate',pests:'Leaf curl virus, fruit borer',drought:'Low',legume:false,before:['Rice','Mung Bean'],after:['Rice','Mung Bean'],desc:'A high-value vegetable needing regular care.'},
- {id:'veg',name:'Vegetables',emoji:'🥬',season:'All Seasons',duration:'40–90 days',temp:'18–32°C',moisture:'Moderate',soil:'Rich loam with organic matter',nitrogen:'Moderate',fertilizer:'Compost plus targeted feed.',water:2,waterLabel:'Moderate',pests:'Aphids, caterpillars, wilts',drought:'Low',legume:false,before:['Rice','Mung Bean'],after:['Rice','Mung Bean'],desc:'Mixed seasonal vegetables for local markets.'}
-];
+/* Crop catalog cache. Filled from GET /api/crops by getCropData(). There is no local copy of the catalog:
+   the SQLite database behind the API is the only source of crop data. */
+let cropData = [];
 const locations = {Rangpur:[25.75,89.25],Rajshahi:[24.37,88.6],Mymensingh:[24.75,90.4],Dhaka:[23.81,90.41],Khulna:[22.82,89.55]};
 const defaultFarm = {location:'Rangpur, Bangladesh',size:'1.0',crop:'Rice',previous:'Rice',irrigation:'Limited',priority:'Water efficiency',soil:'Clay loam'};
 /* DEV ONLY: demo environmental data in the same shape as the API response. Used only when
@@ -23,28 +14,31 @@ const whatIfScenarios = [{name:'Normal rainfall',water:0,note:'Baseline conditio
 const demoReferences = ['Placeholder: regional crop-rotation study A (fictional)','Placeholder: pulse nitrogen contribution review (fictional)','Placeholder: cereal water-use comparison (fictional)'];
 /* Swap each body for fetch('/api/...').then(r=>r.json()) when the Python API exists. */
 const delay=(v,ms=120)=>new Promise(r=>setTimeout(()=>r(v),ms));
-const getCropData=()=>delay(cropData);
 const getFarmData=()=>delay(JSON.parse(localStorage.getItem('fsFarm')||'null')||defaultFarm);
 const saveFarmData=f=>{localStorage.setItem('fsFarm',JSON.stringify(f));return delay(f,0)};
-/* Stage 1: real environmental data from our FastAPI backend (which calls NASA POWER).
-   Throws an Error with a short message on any failure; callers show a friendly message. */
-async function getEnvironmentalData(latitude, longitude) {
-  if (HARVESTV_CONFIG.useMockEnvironment) return delay(mockEnvironmentalApiResponse);
-  const url = `${HARVESTV_CONFIG.apiBaseUrl}/api/environment?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`;
+/* Shared GET helper for every HarvestV API call. Throws an Error (with .status for HTTP errors). */
+async function apiGet(path, timeoutMs = 25000) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000); // NASA can be slow
+  const timer = setTimeout(() => controller.abort(), timeoutMs); // NASA / a sleeping Render server can be slow
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(`${HARVESTV_CONFIG.apiBaseUrl}${path}`, { signal: controller.signal });
     if (!res.ok) {
       let detail = '';
       try { detail = (await res.json()).detail; } catch (e) { /* non-JSON error body */ }
-      throw new Error(`Backend returned ${res.status}${detail ? ': ' + (typeof detail === 'string' ? detail : 'invalid request') : ''}`);
+      const err = new Error(`Backend returned ${res.status}${detail ? ': ' + (typeof detail === 'string' ? detail : 'invalid request') : ''}`);
+      err.status = res.status;
+      throw err;
     }
     return await res.json();
   } catch (err) {
-    if (err.name === 'AbortError') throw new Error('The environmental data request timed out.');
+    if (err.name === 'AbortError') throw new Error('The request timed out.');
     throw err;
   } finally { clearTimeout(timer); }
+}
+/* Stage 1: environmental data from our FastAPI backend (which calls NASA POWER). */
+async function getEnvironmentalData(latitude, longitude) {
+  if (HARVESTV_CONFIG.useMockEnvironment) return delay(mockEnvironmentalApiResponse);
+  return apiGet(`/api/environment?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`);
 }
 /* Turns the API response into the small object the UI uses. Throws if the response is malformed. */
 function toEnvironmentView(api) {
@@ -55,4 +49,27 @@ function toEnvironmentView(api) {
     isMock: !!(api.sources && /demo/i.test(api.sources.weather || '')),
     soilMoisture: api.soil ? api.soil.moisture : null, ndvi: api.vegetation ? api.vegetation.ndvi : null };
 }
+/* Stage 2: crops come from the SQLite-backed API. toCropView() maps API field names to the names the
+   rest of app.js already uses, so the Crop pages and the mock rotation logic did not need to change. */
+function toCropView(api) {
+  if (!api || !api.id || !api.name) throw new Error('Unexpected crop data format.');
+  return { id: api.id, name: api.name, emoji: api.emoji || '', season: api.season, desc: api.description,
+    duration: api.growing_duration, temp: api.temperature_range, moisture: api.soil_moisture, soil: api.soil_requirements,
+    nitrogen: api.nitrogen_requirement, fertilizer: api.fertilizer_notes, water: api.water_demand_score,
+    waterLabel: api.water_requirement, pests: api.pest_disease_notes, drought: api.drought_tolerance,
+    legume: !!api.is_legume, before: api.preceding_crops || [], after: api.following_crops || [] };
+}
+let cropCatalogRequest = null; // shares one request if several pages ask at once
+function getCropData(force = false) {
+  if (cropData.length && !force) return Promise.resolve(cropData);
+  if (!cropCatalogRequest) {
+    cropCatalogRequest = apiGet('/api/crops').then(res => {
+      if (!res || !Array.isArray(res.crops) || !res.crops.length) throw new Error('Unexpected crop list format.');
+      cropData = res.crops.map(toCropView);
+      return cropData;
+    }).finally(() => { cropCatalogRequest = null; });
+  }
+  return cropCatalogRequest;
+}
+async function getCropById(id) { return toCropView(await apiGet(`/api/crops/${encodeURIComponent(id)}`)); }
 const getRotationCandidates=()=>delay(rotationTemplates);
