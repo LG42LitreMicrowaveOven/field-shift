@@ -1,0 +1,91 @@
+{
+ "engine_version": "0.1.0-stage3b",
+ "disclaimer": "Structural sequence generation on catalog data only. Not validated agronomic advice; 'supported' means listed in both catalog lists, nothing more.",
+ "input": {
+  "length": 2,
+  "season_slots": [
+   "Winter",
+   "Winter"
+  ],
+  "previous_crop_id": "veg",
+  "excluded_crop_ids": [],
+  "preferred_crop_ids": [],
+  "mode": "supported_only",
+  "max_results": 10,
+  "max_nodes": 20000,
+  "cyclic": false,
+  "priorities": null,
+  "irrigation": null
+ },
+ "slot_eligibility": [
+  {
+   "slot": 1,
+   "season": "Winter",
+   "eligible_crop_ids": [
+    "lentil",
+    "maize",
+    "mustard",
+    "potato",
+    "tomato",
+    "veg",
+    "wheat"
+   ],
+   "removed_by_exclusion": [],
+   "removed_by_season": [
+    "jute",
+    "mung",
+    "rice"
+   ]
+  },
+  {
+   "slot": 2,
+   "season": "Winter",
+   "eligible_crop_ids": [
+    "lentil",
+    "maize",
+    "mustard",
+    "potato",
+    "tomato",
+    "veg",
+    "wheat"
+   ],
+   "removed_by_exclusion": [],
+   "removed_by_season": [
+    "jute",
+    "mung",
+    "rice"
+   ]
+  }
+ ],
+ "ranking_policy": [
+  "1. evidence tier (1: all supported or no transitions, 2: has one_sided, 3: has unknown)",
+  "2. fewer unknown transitions",
+  "3. fewer one_sided transitions",
+  "4. more distinct preferred crops included",
+  "5. crop-id sequence (alphabetical tie-break)"
+ ],
+ "search": {
+  "nodes_visited": 7,
+  "max_nodes": 20000,
+  "truncated": false,
+  "search_space_size": 49,
+  "sequences_passing": 0,
+  "sequences_excluded_by_transition_rules": 49,
+  "pruned_extensions": {
+   "supported_only_rejection": 7
+  }
+ },
+ "results": [],
+ "returned": 0,
+ "warnings": [
+  "No sequences satisfy the constraints. 'supported_only' mode rejected unsupported transitions; exploratory mode may return results."
+ ],
+ "catalog": {
+  "source": "sqlite",
+  "crop_count": 10,
+  "explicit_seasons": [
+   "Summer",
+   "Winter"
+  ]
+ }
+}

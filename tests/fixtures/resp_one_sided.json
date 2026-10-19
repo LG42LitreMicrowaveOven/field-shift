@@ -1,0 +1,369 @@
+{
+ "engine_version": "0.1.0-stage3b",
+ "disclaimer": "Structural sequence generation on catalog data only. Not validated agronomic advice; 'supported' means listed in both catalog lists, nothing more.",
+ "input": {
+  "length": 1,
+  "season_slots": [
+   "Winter"
+  ],
+  "previous_crop_id": "wheat",
+  "excluded_crop_ids": [],
+  "preferred_crop_ids": [],
+  "mode": "exploratory",
+  "max_results": 10,
+  "max_nodes": 20000,
+  "cyclic": false,
+  "priorities": null,
+  "irrigation": null
+ },
+ "slot_eligibility": [
+  {
+   "slot": 1,
+   "season": "Winter",
+   "eligible_crop_ids": [
+    "lentil",
+    "maize",
+    "mustard",
+    "potato",
+    "tomato",
+    "veg",
+    "wheat"
+   ],
+   "removed_by_exclusion": [],
+   "removed_by_season": [
+    "jute",
+    "mung",
+    "rice"
+   ]
+  }
+ ],
+ "ranking_policy": [
+  "1. evidence tier (1: all supported or no transitions, 2: has one_sided, 3: has unknown)",
+  "2. fewer unknown transitions",
+  "3. fewer one_sided transitions",
+  "4. more distinct preferred crops included",
+  "5. crop-id sequence (alphabetical tie-break)"
+ ],
+ "search": {
+  "nodes_visited": 7,
+  "max_nodes": 20000,
+  "truncated": false,
+  "search_space_size": 7,
+  "sequences_passing": 7,
+  "sequences_excluded_by_transition_rules": 0,
+  "pruned_extensions": {}
+ },
+ "results": [
+  {
+   "crop_ids": [
+    "maize"
+   ],
+   "crop_names": [
+    "Maize"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "maize",
+     "crop_name": "Maize"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "maize",
+     "status": "one_sided"
+    }
+   ],
+   "evidence_tier": "has_one_sided",
+   "counts": {
+    "supported": 0,
+    "one_sided": 1,
+    "unknown": 0
+   },
+   "ranking_criteria": {
+    "tier": 2,
+    "unknown_transitions": 0,
+    "one_sided_transitions": 1,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "maize"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are one-sided: the catalog's two lists disagree."
+   ],
+   "rank": 1
+  },
+  {
+   "crop_ids": [
+    "lentil"
+   ],
+   "crop_names": [
+    "Lentil"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "lentil",
+     "crop_name": "Lentil"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "lentil",
+     "status": "unknown"
+    }
+   ],
+   "evidence_tier": "has_unknown",
+   "counts": {
+    "supported": 0,
+    "one_sided": 0,
+    "unknown": 1
+   },
+   "ranking_criteria": {
+    "tier": 3,
+    "unknown_transitions": 1,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "lentil"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are unknown: not verified by the catalog, and not prohibited."
+   ],
+   "rank": 2
+  },
+  {
+   "crop_ids": [
+    "mustard"
+   ],
+   "crop_names": [
+    "Mustard"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "mustard",
+     "crop_name": "Mustard"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "mustard",
+     "status": "unknown"
+    }
+   ],
+   "evidence_tier": "has_unknown",
+   "counts": {
+    "supported": 0,
+    "one_sided": 0,
+    "unknown": 1
+   },
+   "ranking_criteria": {
+    "tier": 3,
+    "unknown_transitions": 1,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "mustard"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are unknown: not verified by the catalog, and not prohibited."
+   ],
+   "rank": 3
+  },
+  {
+   "crop_ids": [
+    "potato"
+   ],
+   "crop_names": [
+    "Potato"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "potato",
+     "crop_name": "Potato"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "potato",
+     "status": "unknown"
+    }
+   ],
+   "evidence_tier": "has_unknown",
+   "counts": {
+    "supported": 0,
+    "one_sided": 0,
+    "unknown": 1
+   },
+   "ranking_criteria": {
+    "tier": 3,
+    "unknown_transitions": 1,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "potato"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are unknown: not verified by the catalog, and not prohibited."
+   ],
+   "rank": 4
+  },
+  {
+   "crop_ids": [
+    "tomato"
+   ],
+   "crop_names": [
+    "Tomato"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "tomato",
+     "crop_name": "Tomato"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "tomato",
+     "status": "unknown"
+    }
+   ],
+   "evidence_tier": "has_unknown",
+   "counts": {
+    "supported": 0,
+    "one_sided": 0,
+    "unknown": 1
+   },
+   "ranking_criteria": {
+    "tier": 3,
+    "unknown_transitions": 1,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "tomato"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are unknown: not verified by the catalog, and not prohibited."
+   ],
+   "rank": 5
+  },
+  {
+   "crop_ids": [
+    "veg"
+   ],
+   "crop_names": [
+    "Vegetables"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "veg",
+     "crop_name": "Vegetables"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "veg",
+     "status": "unknown"
+    }
+   ],
+   "evidence_tier": "has_unknown",
+   "counts": {
+    "supported": 0,
+    "one_sided": 0,
+    "unknown": 1
+   },
+   "ranking_criteria": {
+    "tier": 3,
+    "unknown_transitions": 1,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "veg"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are unknown: not verified by the catalog, and not prohibited."
+   ],
+   "rank": 6
+  },
+  {
+   "crop_ids": [
+    "wheat"
+   ],
+   "crop_names": [
+    "Wheat"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Winter",
+     "crop_id": "wheat",
+     "crop_name": "Wheat"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "from_previous",
+     "from_crop_id": "wheat",
+     "to_crop_id": "wheat",
+     "status": "unknown"
+    }
+   ],
+   "evidence_tier": "has_unknown",
+   "counts": {
+    "supported": 0,
+    "one_sided": 0,
+    "unknown": 1
+   },
+   "ranking_criteria": {
+    "tier": 3,
+    "unknown_transitions": 1,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "wheat"
+    ]
+   },
+   "warnings": [
+    "1 transition(s) are unknown: not verified by the catalog, and not prohibited."
+   ],
+   "rank": 7
+  }
+ ],
+ "returned": 7,
+ "warnings": [],
+ "catalog": {
+  "source": "sqlite",
+  "crop_count": 10,
+  "explicit_seasons": [
+   "Summer",
+   "Winter"
+  ]
+ }
+}

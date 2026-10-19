@@ -1,5 +1,5 @@
-/* Mock data for HarvestV. Every get*() function returns a Promise so it can later be swapped for
-   fetch("/api/...") with no change in app.js. All values are DEMONSTRATION data. */
+/* Data layer for HarvestV. Crops and rotation sequences come from the API; the remaining mock data below
+   (farm profile defaults, demo environment, what-if text, placeholder references) is DEMONSTRATION data. */
 /* Crop catalog cache. Filled from GET /api/crops by getCropData(). There is no local copy of the catalog:
    the SQLite database behind the API is the only source of crop data. */
 let cropData = [];
@@ -8,25 +8,34 @@ const defaultFarm = {location:'Rangpur, Bangladesh',size:'1.0',crop:'Rice',previ
 /* DEV ONLY: demo environmental data in the same shape as the API response. Used only when
    HARVESTV_CONFIG.useMockEnvironment is true and always labelled as demo data, never as NASA. */
 const mockEnvironmentalApiResponse = {location:{latitude:25.75,longitude:89.25},weather:{temperature:29,rainfall:42,rainfall_days:7,solar_radiation:18.2,solar_radiation_units:'MJ/m²/day',data_date:'demo'},soil:{moisture:null},vegetation:{ndvi:null},sources:{weather:'Demo data (not NASA)',soil:null,vegetation:null}};
-/* Candidate sequences the mock "engine" scores. A real backend would produce these. */
-const rotationTemplates = [['Rice','Mung Bean','Rice'],['Rice','Wheat','Rice'],['Rice','Mustard','Rice'],['Rice','Lentil','Jute'],['Maize','Mung Bean','Wheat'],['Potato','Rice','Mustard']];
 const whatIfScenarios = [{name:'Normal rainfall',water:0,note:'Baseline conditions.'},{name:'Lower rainfall',water:1,note:'Water-hungry crops face more stress.'},{name:'Higher temperature',water:0.5,note:'Heat can shorten planting windows for cool-season crops.'},{name:'Limited irrigation',water:1,note:'Needs reliable irrigation for later stages.'}];
 const demoReferences = ['Placeholder: regional crop-rotation study A (fictional)','Placeholder: pulse nitrogen contribution review (fictional)','Placeholder: cereal water-use comparison (fictional)'];
 /* Swap each body for fetch('/api/...').then(r=>r.json()) when the Python API exists. */
 const delay=(v,ms=120)=>new Promise(r=>setTimeout(()=>r(v),ms));
 const getFarmData=()=>delay(JSON.parse(localStorage.getItem('fsFarm')||'null')||defaultFarm);
 const saveFarmData=f=>{localStorage.setItem('fsFarm',JSON.stringify(f));return delay(f,0)};
-/* Shared GET helper for every HarvestV API call. Throws an Error (with .status for HTTP errors). */
-async function apiGet(path, timeoutMs = 25000) {
+/* Shared helper for every HarvestV API call. Throws an Error with .status (HTTP errors) and .detail (a plain-text
+   explanation, if the server gave one). Errors without .status are network failures or timeouts. */
+function describeApiDetail(detail) {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) { // FastAPI request-validation errors: [{loc: [...], msg: '...'}, ...]
+    return detail.map(d => (d && d.msg ? ((d.loc || []).slice(1).join('.') ? (d.loc || []).slice(1).join('.') + ': ' : '') + d.msg : '')).filter(Boolean).join('; ') || 'invalid request';
+  }
+  return 'invalid request';
+}
+async function apiRequest(path, { method = 'GET', body, timeoutMs = 25000 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs); // NASA / a sleeping Render server can be slow
+  const init = { method, signal: controller.signal };
+  if (body !== undefined) { init.headers = { 'Content-Type': 'application/json' }; init.body = JSON.stringify(body); }
   try {
-    const res = await fetch(`${HARVESTV_CONFIG.apiBaseUrl}${path}`, { signal: controller.signal });
+    const res = await fetch(`${HARVESTV_CONFIG.apiBaseUrl}${path}`, init);
     if (!res.ok) {
       let detail = '';
       try { detail = (await res.json()).detail; } catch (e) { /* non-JSON error body */ }
-      const err = new Error(`Backend returned ${res.status}${detail ? ': ' + (typeof detail === 'string' ? detail : 'invalid request') : ''}`);
-      err.status = res.status;
+      const text = detail ? describeApiDetail(detail) : '';
+      const err = new Error(`Backend returned ${res.status}${text ? ': ' + text : ''}`);
+      err.status = res.status; err.detail = text;
       throw err;
     }
     return await res.json();
@@ -35,6 +44,8 @@ async function apiGet(path, timeoutMs = 25000) {
     throw err;
   } finally { clearTimeout(timer); }
 }
+const apiGet = (path, timeoutMs = 25000) => apiRequest(path, { timeoutMs });
+const apiPost = (path, body, timeoutMs = 45000) => apiRequest(path, { method: 'POST', body, timeoutMs }); // allows for a cold Render start
 /* Stage 1: environmental data from our FastAPI backend (which calls NASA POWER). */
 async function getEnvironmentalData(latitude, longitude) {
   if (HARVESTV_CONFIG.useMockEnvironment) return delay(mockEnvironmentalApiResponse);
@@ -72,4 +83,3 @@ function getCropData(force = false) {
   return cropCatalogRequest;
 }
 async function getCropById(id) { return toCropView(await apiGet(`/api/crops/${encodeURIComponent(id)}`)); }
-const getRotationCandidates=()=>delay(rotationTemplates);

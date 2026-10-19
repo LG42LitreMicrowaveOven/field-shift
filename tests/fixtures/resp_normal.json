@@ -1,0 +1,303 @@
+{
+ "engine_version": "0.1.0-stage3b",
+ "disclaimer": "Structural sequence generation on catalog data only. Not validated agronomic advice; 'supported' means listed in both catalog lists, nothing more.",
+ "input": {
+  "length": 3,
+  "season_slots": [
+   "Summer",
+   "Winter",
+   "Summer"
+  ],
+  "previous_crop_id": null,
+  "excluded_crop_ids": [],
+  "preferred_crop_ids": [],
+  "mode": "exploratory",
+  "max_results": 3,
+  "max_nodes": 20000,
+  "cyclic": false,
+  "priorities": null,
+  "irrigation": null
+ },
+ "slot_eligibility": [
+  {
+   "slot": 1,
+   "season": "Summer",
+   "eligible_crop_ids": [
+    "jute",
+    "mung",
+    "rice",
+    "veg"
+   ],
+   "removed_by_exclusion": [],
+   "removed_by_season": [
+    "lentil",
+    "maize",
+    "mustard",
+    "potato",
+    "tomato",
+    "wheat"
+   ]
+  },
+  {
+   "slot": 2,
+   "season": "Winter",
+   "eligible_crop_ids": [
+    "lentil",
+    "maize",
+    "mustard",
+    "potato",
+    "tomato",
+    "veg",
+    "wheat"
+   ],
+   "removed_by_exclusion": [],
+   "removed_by_season": [
+    "jute",
+    "mung",
+    "rice"
+   ]
+  },
+  {
+   "slot": 3,
+   "season": "Summer",
+   "eligible_crop_ids": [
+    "jute",
+    "mung",
+    "rice",
+    "veg"
+   ],
+   "removed_by_exclusion": [],
+   "removed_by_season": [
+    "lentil",
+    "maize",
+    "mustard",
+    "potato",
+    "tomato",
+    "wheat"
+   ]
+  }
+ ],
+ "ranking_policy": [
+  "1. evidence tier (1: all supported or no transitions, 2: has one_sided, 3: has unknown)",
+  "2. fewer unknown transitions",
+  "3. fewer one_sided transitions",
+  "4. more distinct preferred crops included",
+  "5. crop-id sequence (alphabetical tie-break)"
+ ],
+ "search": {
+  "nodes_visited": 144,
+  "max_nodes": 20000,
+  "truncated": false,
+  "search_space_size": 112,
+  "sequences_passing": 112,
+  "sequences_excluded_by_transition_rules": 0,
+  "pruned_extensions": {}
+ },
+ "results": [
+  {
+   "crop_ids": [
+    "jute",
+    "lentil",
+    "jute"
+   ],
+   "crop_names": [
+    "Jute",
+    "Lentil",
+    "Jute"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Summer",
+     "crop_id": "jute",
+     "crop_name": "Jute"
+    },
+    {
+     "slot": 2,
+     "season": "Winter",
+     "crop_id": "lentil",
+     "crop_name": "Lentil"
+    },
+    {
+     "slot": 3,
+     "season": "Summer",
+     "crop_id": "jute",
+     "crop_name": "Jute"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "within_plan",
+     "from_crop_id": "jute",
+     "to_crop_id": "lentil",
+     "status": "supported"
+    },
+    {
+     "kind": "within_plan",
+     "from_crop_id": "lentil",
+     "to_crop_id": "jute",
+     "status": "supported"
+    }
+   ],
+   "evidence_tier": "all_supported",
+   "counts": {
+    "supported": 2,
+    "one_sided": 0,
+    "unknown": 0
+   },
+   "ranking_criteria": {
+    "tier": 1,
+    "unknown_transitions": 0,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "jute",
+     "lentil",
+     "jute"
+    ]
+   },
+   "warnings": [],
+   "rank": 1
+  },
+  {
+   "crop_ids": [
+    "jute",
+    "lentil",
+    "rice"
+   ],
+   "crop_names": [
+    "Jute",
+    "Lentil",
+    "Rice"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Summer",
+     "crop_id": "jute",
+     "crop_name": "Jute"
+    },
+    {
+     "slot": 2,
+     "season": "Winter",
+     "crop_id": "lentil",
+     "crop_name": "Lentil"
+    },
+    {
+     "slot": 3,
+     "season": "Summer",
+     "crop_id": "rice",
+     "crop_name": "Rice"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "within_plan",
+     "from_crop_id": "jute",
+     "to_crop_id": "lentil",
+     "status": "supported"
+    },
+    {
+     "kind": "within_plan",
+     "from_crop_id": "lentil",
+     "to_crop_id": "rice",
+     "status": "supported"
+    }
+   ],
+   "evidence_tier": "all_supported",
+   "counts": {
+    "supported": 2,
+    "one_sided": 0,
+    "unknown": 0
+   },
+   "ranking_criteria": {
+    "tier": 1,
+    "unknown_transitions": 0,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "jute",
+     "lentil",
+     "rice"
+    ]
+   },
+   "warnings": [],
+   "rank": 2
+  },
+  {
+   "crop_ids": [
+    "jute",
+    "mustard",
+    "jute"
+   ],
+   "crop_names": [
+    "Jute",
+    "Mustard",
+    "Jute"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "season": "Summer",
+     "crop_id": "jute",
+     "crop_name": "Jute"
+    },
+    {
+     "slot": 2,
+     "season": "Winter",
+     "crop_id": "mustard",
+     "crop_name": "Mustard"
+    },
+    {
+     "slot": 3,
+     "season": "Summer",
+     "crop_id": "jute",
+     "crop_name": "Jute"
+    }
+   ],
+   "transitions": [
+    {
+     "kind": "within_plan",
+     "from_crop_id": "jute",
+     "to_crop_id": "mustard",
+     "status": "supported"
+    },
+    {
+     "kind": "within_plan",
+     "from_crop_id": "mustard",
+     "to_crop_id": "jute",
+     "status": "supported"
+    }
+   ],
+   "evidence_tier": "all_supported",
+   "counts": {
+    "supported": 2,
+    "one_sided": 0,
+    "unknown": 0
+   },
+   "ranking_criteria": {
+    "tier": 1,
+    "unknown_transitions": 0,
+    "one_sided_transitions": 0,
+    "preferred_matches": 0,
+    "crop_id_sequence": [
+     "jute",
+     "mustard",
+     "jute"
+    ]
+   },
+   "warnings": [],
+   "rank": 3
+  }
+ ],
+ "returned": 3,
+ "warnings": [],
+ "catalog": {
+  "source": "sqlite",
+  "crop_count": 10,
+  "explicit_seasons": [
+   "Summer",
+   "Winter"
+  ]
+ }
+}

@@ -1,6 +1,6 @@
 /* HarvestV frontend prototype: hash-routed single page app, plain JS. */
 const app = document.getElementById('app');
-const state = { profile: null, results: [], report: null, coords: null, env: { data: null, fetchedAt: null, key: null } };
+const state = { profile: null, rotation: null, rotForm: null, report: null, coords: null, env: { data: null, fetchedAt: null, key: null } };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const findCrop = n => cropData.find(c => c.name === n);
 const tone = (label, goodHigh = true) => {
@@ -11,7 +11,8 @@ const badge = (t, goodHigh = true) => `<span class="badge ${tone(t, goodHigh)}">
 const seqHtml = seq => `<span class="seq">${seq.map(esc).join('<i> → </i>')}</span>`;
 const cropOptions = (sel) => cropData.map(c => `<option ${c.name === sel ? 'selected' : ''}>${c.name}</option>`).join('');
 
-/* ---------- Mock rotation engine (replace with POST /api/rotations/analyze) ---------- */
+/* ---------- DEMO scoring, used ONLY by "Analyze My Rotation" and its report (not produced by the rotation engine) ----------
+   Generated sequences come from POST /api/rotations/generate (see js/rotation.js). */
 function evaluateRotation(seq, p) {
   const crops = seq.map(findCrop), avgWater = crops.reduce((s, c) => s + c.water, 0) / crops.length;
   const legume = crops.some(c => c.legume), unique = new Set(seq).size;
@@ -55,10 +56,6 @@ function evaluateRotation(seq, p) {
   return { seq, score, suitability: score >= 3.4 ? 'High' : score >= 2.6 ? 'Moderate' : 'Lower', water: waterLabel, risk: riskLabel, risk_pts: risk,
     ratings: Object.fromEntries(Object.entries(ratings).map(([k, v]) => [k, v])), ratingLabel: L, strengths, risks, reasons, concerns };
 }
-async function generateRotationStrategies(profile) {
-  const templates = await getRotationCandidates(); // API: POST /api/rotations/generate
-  return templates.map(t => evaluateRotation(t, profile)).sort((a, b) => b.score - a.score).slice(0, 4);
-}
 async function analyzeRotation(seq, profile) { return evaluateRotation(seq, profile); } // API: POST /api/rotations/analyze
 
 /* ---------- Shared UI pieces ---------- */
@@ -77,12 +74,12 @@ function displayEnvironmentalConditions(e) {
   <details><summary>Details</summary><p>Source: ${esc(e.source)}. Latest available daily data: ${esc(e.dataDate)} (NASA POWER daily data arrives with a short delay, so this is recent rather than live). Temperature is the average air temperature at 2 m. Rainfall is corrected precipitation summed over the days shown. Solar radiation is the sunlight reaching the ground on a typical sky. Soil moisture (NASA SMAP) and vegetation condition (NASA MODIS) will be added later.</p></details>`;
 }
 const fieldSel = (id, label, opts, val) => `<div><label for="${id}">${label}</label><select id="${id}" name="${id}">${opts.map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
-function farmFormFields(f) {
+function farmFormFields(f, { skipPrevious = false } = {}) {
   return `<div class="form">
     <div><label for="location">Location</label><select id="location" name="location">${Object.keys(locations).map(l => `<option ${f.location.startsWith(l) ? 'selected' : ''}>${l}, Bangladesh</option>`).join('')}</select></div>
     <div><label for="size">Cultivation land size (hectares)</label><input type="number" id="size" name="size" min="0.1" step="0.1" value="${f.size}"></div>
     ${fieldSel('soil', 'Soil type', ['Clay loam', 'Loam', 'Sandy loam', 'Alluvial', 'Clay'], f.soil)}
-    ${fieldSel('previous', 'Current / previous crop', cropData.map(c => c.name), f.previous)}
+    ${skipPrevious ? '' : fieldSel('previous', 'Current / previous crop', cropData.map(c => c.name), f.previous)}
     ${fieldSel('irrigation', 'Irrigation capability', ['None', 'Limited', 'Moderate', 'Reliable'], f.irrigation)}
     ${fieldSel('labour', 'Labour availability', ['Family only', 'Limited hired labour', 'Good availability'], 'Family only')}
   </div>
@@ -282,26 +279,72 @@ const views = {
   },
   async generate() {
     if (!(await ensureCropCatalog())) return;
-    getFarmData().then(f => {
-      app.innerHTML = `<h1 class="title">Generate Rotation Strategy</h1><p class="sub">Tell us about your farm and what matters most to you.</p>
-        <form id="gf" class="card">${farmFormFields(f)}<h2>Preferred crops</h2><div class="chips">${['Rice', 'Mung Bean', 'Wheat', 'Maize', 'Lentil', 'Mustard'].map(c => `<label class="chip"><input type="checkbox" name="crops" value="${c}"><span>${c}</span></label>`).join('')}</div>
-        <p><button class="btn yellow">Generate Strategies</button></p></form>`;
-      document.getElementById('gf').onsubmit = e => { e.preventDefault(); const p = readProfile(e.target); state.profile = p;
-        runProcessing('Analyzing your farm...', ['Reading farm conditions', 'Checking suitable crops', 'Comparing rotation compatibility', 'Evaluating environmental conditions', 'Considering your priorities'],
-          async () => { state.results = await generateRotationStrategies(p); location.hash = '#/results'; }); };
-    });
+    const stamp = location.hash, f = await getFarmData();
+    if (location.hash !== stamp) return;
+    const seasons = rotSeasonOptions(cropData), byName = n => (cropData.find(c => c.name === n) || {}).id || '';
+    // Form state survives a round trip to the results page. Slots start empty on purpose: seasons are never assumed.
+    const st = state.rotForm || { slots: ['', '', ''], previousId: byName(f.previous), mode: 'exploratory', cyclic: false, preferredIds: [], excludedIds: [] };
+    const slotSelects = slots => slots.map((v, i) => `<div><label for="slot${i}">Slot ${i + 1} season</label><select id="slot${i}" name="slot"><option value="">Choose a season…</option>${seasons.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`).join('');
+    const crops = (name, ids) => cropData.map(c => `<label class="chip"><input type="checkbox" name="${name}" value="${esc(c.id)}" ${ids.includes(c.id) ? 'checked' : ''}><span>${c.emoji ? esc(c.emoji) + ' ' : ''}${esc(c.name)}</span></label>`).join('');
+    app.innerHTML = `<h1 class="title">Generate Rotation Strategy</h1><p class="sub">Build exploratory crop sequences from the crop catalog, one season slot at a time.</p>${rotDisclaimerHtml()}
+      <div id="rotMsg" aria-live="polite"></div>
+      <form id="gf" class="card" novalidate>
+        <h2 style="margin-top:0">Rotation plan <span class="used">Used to generate sequences</span></h2>
+        <div class="form">
+          <div><label for="rotLen">Number of seasons</label><select id="rotLen">${Array.from({ length: ROT_MAX_SLOTS }, (_, i) => `<option ${i + 1 === st.slots.length ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></div>
+          <div><label for="prevCrop">Previous crop</label><select id="prevCrop"><option value="">None / not specified</option>${cropData.map(c => `<option value="${esc(c.id)}" ${c.id === st.previousId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+          <div><label for="rotMode">Transition mode</label><select id="rotMode">${Object.entries(ROT_MODES).map(([k, v]) => `<option value="${k}" ${k === st.mode ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+        </div>
+        <h3 style="margin-top:18px">Season for each slot</h3>
+        <div class="form" id="slotBox">${slotSelects(st.slots)}</div>
+        <p class="hint">Season labels come from the crop catalog. They are coarse labels, not a local planting calendar. Crops labelled “All Seasons” can fit any slot.</p>
+        <label class="chip" style="margin-top:6px"><input type="checkbox" id="rotCyclic" ${st.cyclic ? 'checked' : ''}><span>Cyclic: also check that the last crop can lead back to the first</span></label>
+        <h3 style="margin-top:18px">Preferred crops <span class="used">Ranking only</span></h3>
+        <div class="chips">${crops('pref', st.preferredIds)}</div>
+        <h3 style="margin-top:18px">Crops to leave out</h3>
+        <div class="chips">${crops('excl', st.excludedIds)}</div>
+        <div class="unused"><h2 style="margin-top:0">About your farm <span class="used off">Not used to rank rotations yet</span></h2>
+          <p class="hint">These details are collected for future features. They do not change the sequences generated today.</p>${farmFormFields(f, { skipPrevious: true })}</div>
+        <p><button class="btn yellow" id="gBtn">Generate Strategies</button></p></form>`;
+    const form = document.getElementById('gf'), msg = document.getElementById('rotMsg'), btn = document.getElementById('gBtn');
+    const read = () => ({
+      slots: [...form.querySelectorAll('select[name=slot]')].map(x => x.value), previousId: form.prevCrop.value, mode: form.rotMode.value,
+      cyclic: form.rotCyclic.checked, preferredIds: [...form.querySelectorAll('input[name=pref]:checked')].map(x => x.value),
+      excludedIds: [...form.querySelectorAll('input[name=excl]:checked')].map(x => x.value) });
+    const show = (kind, html) => { msg.innerHTML = html ? `<div class="alert ${kind}" role="${kind === 'info' ? 'status' : 'alert'}">${html}</div>` : ''; };
+    document.getElementById('rotLen').onchange = e => { // resize the slot list, keeping what was already chosen
+      const n = +e.target.value, cur = read().slots;
+      document.getElementById('slotBox').innerHTML = slotSelects(Array.from({ length: n }, (_, i) => cur[i] || ''));
+    };
+    let pending = false;
+    form.onsubmit = async e => {
+      e.preventDefault();
+      if (pending) return; // no duplicate submissions
+      const input = read(); state.rotForm = input; state.rotation = null; // an old result must never look like this request's
+      const { errors, payload } = buildRotationRequest(input, cropData);
+      if (errors.length) return show('err', `<b>Please fix:</b><ul>${errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
+      pending = true; btn.disabled = true; btn.textContent = 'Generating…';
+      show('info', 'Generating sequences… If the server has been idle this can take up to a minute.');
+      try {
+        const response = await requestRotations(payload);
+        if (!response || !Array.isArray(response.results) || !response.search || !response.input) throw new Error('Unexpected rotation data format.');
+        state.rotation = { request: payload, response };
+        if (location.hash === stamp) location.hash = '#/results';
+      } catch (err) {
+        console.warn('Rotation request failed:', err);
+        const m = rotationErrorMessage(err);
+        if (document.body.contains(form)) show('err', `<b>${m.kind === 'validation' ? 'This request could not be used' : 'Something went wrong'}.</b> ${esc(m.message)}`);
+      } finally {
+        pending = false;
+        if (document.body.contains(form)) { btn.disabled = false; btn.textContent = 'Generate Strategies'; }
+      }
+    };
   },
   results() {
-    if (!state.results.length) return location.hash = '#/generate';
+    const r = state.rotation;
+    if (!r) return location.hash = '#/generate';
     app.className = 'fade';
-    app.innerHTML = `<h1 class="title">Recommended Rotation Options</h1><p class="sub">Ranked by suitability for your farm and priorities. Demo data.</p>` + state.results.map((r, i) => `
-      <div class="card opt"><div class="num">${i + 1}</div><div class="body">${seqHtml(r.seq)}
-      <div class="metrics"><span>Suitability<b>${badge(r.suitability)}</b></span><span>Water requirement<b>${esc(r.water)}</b></span><span>Risk<b>${badge(r.risk, false)}</b></span></div>
-      <button class="btn ghost" data-toggle="${i}">View Analysis</button>
-      <div class="more" id="more${i}"><h3>Why this option?</h3><ul class="ok">${r.reasons.map(x => `<li>${x}</li>`).join('')}</ul>
-      <h3>Potential concerns</h3><ul class="warn">${r.concerns.map(x => `<li>${x}</li>`).join('')}</ul>
-      <details><summary>Evidence</summary><p>Based on crop water needs, legume contribution, repeat-crop risk and your selected priorities. Demo data; backend research database not connected.</p></details>
-      <p><button class="btn" data-report="${i}">View Detailed Report</button></p></div></div></div>`).join('');
+    app.innerHTML = `<button class="back" onclick="location.hash='#/generate'">← Change settings</button><div style="margin-top:14px">${renderRotationResults(r.response, cropData)}</div>`;
   },
   async report() {
     if (!state.report) return location.hash = '#/home';
@@ -330,7 +373,7 @@ const views = {
   async analyze() {
     if (!(await ensureCropCatalog())) return;
     getFarmData().then(f => {
-      app.innerHTML = `<h1 class="title">Analyze My Rotation</h1><p class="sub">Enter the rotation you are considering.</p>
+      app.innerHTML = `<h1 class="title">Analyze My Rotation</h1><p class="sub">Enter the rotation you are considering.</p><p class="disclaimer" role="note">Demo scoring: this page uses illustrative placeholder logic, not the rotation engine behind “Generate Rotation Strategy”. Do not treat its ratings as agronomic advice.</p>
         <form id="af" class="card"><div class="form">${[['Crop 1', 'Rice'], ['Crop 2', 'Mung Bean'], ['Crop 3', 'Rice']].map(([l, v], i) => `<div><label for="c${i}">${l}</label><select id="c${i}" name="seq">${cropOptions(v)}</select></div>`).join('')}</div>
         <h2>Your farm</h2>${farmFormFields(f)}<p><button class="btn yellow">Analyze Rotation</button></p></form>`;
       document.getElementById('af').onsubmit = e => { e.preventDefault(); const p = readProfile(e.target), seq = new FormData(e.target).getAll('seq'); state.profile = p;
@@ -359,9 +402,6 @@ const views = {
 
 /* ---------- Router ---------- */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-toggle]'), r = e.target.closest('[data-report]');
-  if (t) document.getElementById('more' + t.dataset.toggle).classList.toggle('open');
-  if (r) { state.report = { result: state.results[r.dataset.report], profile: state.profile }; location.hash = '#/report'; }
   if (e.target.closest('#rotBtn')) document.getElementById('rotMenu').classList.toggle('open');
   else if (!e.target.closest('#rotCard')) document.getElementById('rotMenu').classList.remove('open');
 });
